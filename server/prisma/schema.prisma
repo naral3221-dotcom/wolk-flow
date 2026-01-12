@@ -1,0 +1,186 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  permissions Json
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  members     Member[]
+
+  @@map("roles")
+}
+
+model Member {
+  id          String   @id @default(uuid())
+  gnuboardId  String?  @unique @map("gnuboard_id")
+  email       String   @unique
+  password    String?
+  name        String
+  avatarUrl   String?  @map("avatar_url")
+  roleId      String   @map("role_id")
+  department  String?
+  position    String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  role              Role              @relation(fields: [roleId], references: [id])
+  ownedProjects     Project[]         @relation("ProjectOwner")
+  projectMemberships ProjectMember[]
+  assignedTasks     Task[]            @relation("TaskAssignee")
+  reportedTasks     Task[]            @relation("TaskReporter")
+  comments          Comment[]
+  activityLogs      ActivityLog[]
+
+  @@map("members")
+}
+
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  description String?       @db.Text
+  status      ProjectStatus @default(ACTIVE)
+  startDate   DateTime?     @map("start_date")
+  endDate     DateTime?     @map("end_date")
+  ownerId     String        @map("owner_id")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  owner    Member          @relation("ProjectOwner", fields: [ownerId], references: [id])
+  members  ProjectMember[]
+  tasks    Task[]
+  labels   TaskLabel[]
+
+  @@map("projects")
+}
+
+model ProjectMember {
+  id        String            @id @default(uuid())
+  projectId String            @map("project_id")
+  memberId  String            @map("member_id")
+  role      ProjectMemberRole @default(VIEWER)
+  joinedAt  DateTime          @default(now()) @map("joined_at")
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  member  Member  @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, memberId])
+  @@map("project_members")
+}
+
+model Task {
+  id             String       @id @default(uuid())
+  projectId      String       @map("project_id")
+  title          String
+  description    String?      @db.Text
+  status         TaskStatus   @default(TODO)
+  priority       TaskPriority @default(MEDIUM)
+  assigneeId     String?      @map("assignee_id")
+  reporterId     String?      @map("reporter_id")
+  startDate      DateTime?    @map("start_date")
+  dueDate        DateTime?    @map("due_date")
+  estimatedHours Decimal?     @map("estimated_hours") @db.Decimal(10, 2)
+  actualHours    Decimal?     @map("actual_hours") @db.Decimal(10, 2)
+  order          Int          @default(0)
+  parentId       String?      @map("parent_id")
+  folderUrl      String?      @map("folder_url")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee     Member?       @relation("TaskAssignee", fields: [assigneeId], references: [id])
+  reporter     Member?       @relation("TaskReporter", fields: [reporterId], references: [id])
+  parent       Task?         @relation("TaskSubtasks", fields: [parentId], references: [id])
+  subtasks     Task[]        @relation("TaskSubtasks")
+  labels       TaskLabelRelation[]
+  comments     Comment[]
+  activityLogs ActivityLog[]
+
+  @@map("tasks")
+}
+
+model TaskLabel {
+  id        String @id @default(uuid())
+  name      String
+  color     String
+  projectId String @map("project_id")
+
+  project Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks   TaskLabelRelation[]
+
+  @@map("task_labels")
+}
+
+model TaskLabelRelation {
+  taskId  String @map("task_id")
+  labelId String @map("label_id")
+
+  task  Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label TaskLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@map("task_label_relations")
+}
+
+model Comment {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  authorId  String   @map("author_id")
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author Member @relation(fields: [authorId], references: [id])
+
+  @@map("comments")
+}
+
+model ActivityLog {
+  id        String   @id @default(uuid())
+  taskId    String   @map("task_id")
+  memberId  String   @map("member_id")
+  action    String
+  details   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  member Member @relation(fields: [memberId], references: [id])
+
+  @@map("activity_logs")
+}
+
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ProjectMemberRole {
+  OWNER
+  EDITOR
+  VIEWER
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  REVIEW
+  DONE
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
