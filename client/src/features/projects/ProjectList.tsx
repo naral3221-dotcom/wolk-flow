@@ -153,9 +153,9 @@ export function ProjectList() {
                     {/* Color Bar */}
                     <div className={cn(
                       'h-1.5 w-full',
-                      project.status === 'ACTIVE' && 'bg-gradient-to-r from-blue-500 to-blue-600',
-                      project.status === 'COMPLETED' && 'bg-gradient-to-r from-emerald-500 to-emerald-600',
-                      project.status === 'ON_HOLD' && 'bg-gradient-to-r from-amber-500 to-amber-600',
+                      project.status === 'ACTIVE' && 'bg-linear-to-r from-blue-500 to-blue-600',
+                      project.status === 'COMPLETED' && 'bg-linear-to-r from-emerald-500 to-emerald-600',
+                      project.status === 'ON_HOLD' && 'bg-linear-to-r from-amber-500 to-amber-600',
                     )} />
 
                     <CardContent className="p-5">

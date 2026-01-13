@@ -1,45 +1,55 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { useAuthStore } from '@/stores/authStore';
-import { Layout } from '@/components/layout/Layout';
-import { Login } from '@/features/auth/Login';
-import { Dashboard } from '@/features/dashboard/Dashboard';
-import { ProjectList } from '@/features/projects/ProjectList';
-import { KanbanBoard } from '@/features/kanban/KanbanBoard';
-import { TaskList } from '@/features/tasks/TaskList';
-import { GanttChart } from '@/features/gantt/GanttChart';
-
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />;
-  }
-
-  return <>{children}</>;
-}
+import { useEffect } from "react";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { AppShell } from "@/presentation/components/layout/AppShell";
+import { LevitatingSidebar } from "@/presentation/components/layout/LevitatingSidebar";
+import { Dashboard } from "@/presentation/pages/Dashboard";
+import { KanbanBoard } from "@/presentation/pages/KanbanBoard";
+import { GanttPage } from "@/presentation/pages/GanttPage";
+import { TeamPage } from "@/presentation/pages/TeamPage";
+import { SettingsPage } from "@/presentation/pages/SettingsPage";
+import { SpatialCard } from "@/presentation/components/ui/SpatialCard";
+import { ModalProvider } from "@/presentation/components/modals";
+import { useTaskStore } from "@/stores/taskStore";
+import { useProjectStore } from "@/stores/projectStore";
+import { useMemberStore } from "@/stores/memberStore";
 
 function App() {
+  const fetchTasks = useTaskStore((state) => state.fetchTasks);
+  const fetchProjects = useProjectStore((state) => state.fetchProjects);
+  const fetchMembers = useMemberStore((state) => state.fetchMembers);
+
+  useEffect(() => {
+    fetchTasks();
+    fetchProjects();
+    fetchMembers();
+  }, [fetchTasks, fetchProjects, fetchMembers]);
+
   return (
     <BrowserRouter>
-      <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route
-          path="/"
-          element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Dashboard />} />
-          <Route path="projects" element={<ProjectList />} />
-          <Route path="projects/:projectId/board" element={<KanbanBoard />} />
-          <Route path="projects/:projectId/list" element={<TaskList />} />
-          <Route path="projects/:projectId/timeline" element={<GanttChart />} />
-          <Route path="members" element={<div className="p-6">팀원 관리 페이지 (개발 예정)</div>} />
-          <Route path="settings" element={<div className="p-6">설정 페이지 (개발 예정)</div>} />
-        </Route>
-      </Routes>
+      <ModalProvider>
+      <AppShell>
+        <LevitatingSidebar />
+
+        <main className="flex-1 h-full overflow-hidden p-4 relative z-0">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/tasks" element={<KanbanBoard />} />
+            <Route path="/projects" element={<GanttPage />} />
+            <Route path="/team" element={<TeamPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="*" element={
+              <div className="h-full flex items-center justify-center">
+                <SpatialCard className="p-12 text-center">
+                  <h1 className="text-6xl font-bold text-neon-violet mb-4">404</h1>
+                  <p className="text-xl text-white mb-2">페이지를 찾을 수 없습니다</p>
+                  <p className="text-gray-400">요청하신 페이지가 존재하지 않습니다.</p>
+                </SpatialCard>
+              </div>
+            } />
+          </Routes>
+        </main>
+      </AppShell>
+      </ModalProvider>
     </BrowserRouter>
   );
 }

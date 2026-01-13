@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils';
 import { Avatar } from '@/components/ui/Avatar';
 import { PriorityBadge } from '@/components/ui/Badge';
 import type { Task } from '@/types';
-import { Calendar, MessageSquare, FolderOpen, Clock, CheckCircle2 } from 'lucide-react';
+import { Calendar, MessageSquare, FolderOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 
 interface KanbanCardProps {
@@ -29,7 +29,7 @@ export function KanbanCard({ task, isDragging, onClick }: KanbanCardProps) {
   };
 
   const priorityColors = {
-    LOW: 'from-gray-400 to-gray-500',
+    LOW: 'from-slate-300 to-slate-400',
     MEDIUM: 'from-blue-400 to-blue-500',
     HIGH: 'from-orange-400 to-orange-500',
     URGENT: 'from-red-500 to-red-600',
@@ -45,26 +45,32 @@ export function KanbanCard({ task, isDragging, onClick }: KanbanCardProps) {
       {...listeners}
       onClick={onClick}
       className={cn(
-        'group relative rounded-xl bg-white p-4 shadow-sm cursor-grab active:cursor-grabbing',
-        'border border-gray-100 hover:border-gray-200',
-        'hover:shadow-md transition-all duration-200',
-        (isDragging || isSortableDragging) && 'opacity-60 shadow-xl scale-105 rotate-2',
+        'group relative rounded-xl bg-white p-4 cursor-grab active:cursor-grabbing',
+        'border-2 border-gray-100/80 hover:border-gray-200',
+        'shadow-sm hover:shadow-lg transition-all duration-300',
+        'hover:-translate-y-0.5',
+        (isDragging || isSortableDragging) &&
+          'opacity-90 shadow-2xl scale-105 rotate-1 border-blue-300 ring-4 ring-blue-100'
       )}
     >
-      {/* Priority Indicator */}
+      {/* Priority Indicator - 더 굵고 그라디언트 */}
       <div className={cn(
-        'absolute left-0 top-3 bottom-3 w-1 rounded-r-full bg-gradient-to-b',
+        'absolute left-0 top-4 bottom-4 w-1.5 rounded-r-full',
+        'bg-linear-to-b shadow-sm',
         priorityColors[task.priority]
       )} />
 
-      {/* Labels */}
+      {/* Labels - 더 선명한 색상 */}
       {task.labels && task.labels.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 mb-3 pl-2">
+        <div className="flex flex-wrap gap-1.5 mb-3 pl-3">
           {task.labels.map(({ label }) => (
             <span
               key={label.id}
-              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium text-white shadow-sm"
-              style={{ backgroundColor: label.color }}
+              className="inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold text-white shadow-md uppercase tracking-wide"
+              style={{
+                backgroundColor: label.color,
+                boxShadow: `0 2px 8px ${label.color}50`
+              }}
             >
               {label.name}
             </span>
@@ -72,77 +78,86 @@ export function KanbanCard({ task, isDragging, onClick }: KanbanCardProps) {
         </div>
       )}
 
-      {/* Title */}
-      <h4 className="font-medium text-gray-900 mb-3 pl-2 pr-6 leading-snug group-hover:text-blue-600 transition-colors">
+      {/* Title - 더 명확한 타이포그래피 */}
+      <h4 className="font-semibold text-[15px] text-gray-900 mb-2.5 pl-3 pr-4 leading-relaxed group-hover:text-blue-600 transition-colors line-clamp-2">
         {task.title}
       </h4>
 
-      {/* Description preview */}
+      {/* Description - 더 읽기 쉽게 */}
       {task.description && (
-        <p className="text-xs text-gray-500 mb-3 pl-2 line-clamp-2">
+        <p className="text-sm text-gray-500 mb-3 pl-3 line-clamp-2 leading-relaxed">
           {task.description}
         </p>
       )}
 
-      {/* Meta info */}
-      <div className="flex items-center gap-3 text-xs text-gray-400 mb-3 pl-2">
+      {/* Meta info - 더 큰 아이콘과 여백 */}
+      <div className="flex items-center gap-2 text-xs mb-3 pl-3 flex-wrap">
         {task.dueDate && (
           <div className={cn(
-            'flex items-center gap-1 px-2 py-0.5 rounded-full',
-            isOverdue ? 'bg-red-50 text-red-600' : 'bg-gray-50'
+            'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-semibold transition-colors',
+            isOverdue
+              ? 'bg-red-50 text-red-600 ring-1 ring-red-200'
+              : 'bg-gray-100 text-gray-600'
           )}>
             {isOverdue ? (
-              <Clock className="h-3 w-3" />
+              <AlertCircle className="h-3.5 w-3.5" />
             ) : (
-              <Calendar className="h-3 w-3" />
+              <Calendar className="h-3.5 w-3.5" />
             )}
-            <span className="font-medium">{formatDate(task.dueDate)}</span>
+            <span>{formatDate(task.dueDate)}</span>
           </div>
         )}
+
         {task._count?.comments !== undefined && task._count.comments > 0 && (
-          <div className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-full">
-            <MessageSquare className="h-3 w-3" />
+          <div className="flex items-center gap-1.5 bg-blue-50 text-blue-600 px-2.5 py-1.5 rounded-lg font-semibold">
+            <MessageSquare className="h-3.5 w-3.5" />
             <span>{task._count.comments}</span>
           </div>
         )}
+
         {task._count?.subtasks !== undefined && task._count.subtasks > 0 && (
-          <div className="flex items-center gap-1 bg-gray-50 px-2 py-0.5 rounded-full">
-            <CheckCircle2 className="h-3 w-3" />
+          <div className="flex items-center gap-1.5 bg-green-50 text-green-600 px-2.5 py-1.5 rounded-lg font-semibold">
+            <CheckCircle2 className="h-3.5 w-3.5" />
             <span>{task._count.subtasks}</span>
           </div>
         )}
+
         {task.folderUrl && (
           <a
             href={task.folderUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full hover:bg-blue-100 transition-colors"
+            className="flex items-center gap-1.5 bg-purple-50 text-purple-600 px-2.5 py-1.5 rounded-lg font-semibold hover:bg-purple-100 transition-colors"
             onClick={(e) => e.stopPropagation()}
           >
-            <FolderOpen className="h-3 w-3" />
+            <FolderOpen className="h-3.5 w-3.5" />
           </a>
         )}
       </div>
 
-      {/* Footer */}
-      <div className="flex items-center justify-between pl-2 pt-2 border-t border-gray-50">
+      {/* Footer - 더 명확한 분리 */}
+      <div className="flex items-center justify-between pl-3 pt-3 border-t border-gray-100/80">
         <PriorityBadge priority={task.priority} />
         {task.assignee && (
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-gray-400 hidden group-hover:inline">
+          <div className="flex items-center gap-2 group/avatar">
+            <span className="text-xs text-gray-500 font-medium opacity-0 group-hover/avatar:opacity-100 group-hover:opacity-100 transition-opacity">
               {task.assignee.name}
             </span>
-            <Avatar
-              name={task.assignee.name}
-              src={task.assignee.avatarUrl}
-              size="sm"
-            />
+            <div className="relative">
+              <Avatar
+                name={task.assignee.name}
+                src={task.assignee.avatarUrl}
+                size="sm"
+              />
+              {/* 온라인 상태 표시 */}
+              <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
+            </div>
           </div>
         )}
       </div>
 
-      {/* Hover overlay indicator */}
-      <div className="absolute inset-0 rounded-xl border-2 border-blue-500 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+      {/* Hover border effect - 더 부드럽게 */}
+      <div className="absolute inset-0 rounded-xl border-2 border-blue-400/50 opacity-0 group-hover:opacity-100 transition-all pointer-events-none" />
     </div>
   );
 }

@@ -73,7 +73,8 @@ export interface Task {
   description?: string;
   status: TaskStatus;
   priority: TaskPriority;
-  assignee?: Member;
+  assignee?: Member;  // 단일 담당자 (하위 호환)
+  assignees?: Member[];  // 다중 담당자
   reporter?: Member;
   startDate?: string;
   dueDate?: string;

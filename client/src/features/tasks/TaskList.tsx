@@ -151,7 +151,7 @@ export function TaskList() {
         <div className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
           <table className="w-full">
             <thead>
-              <tr className="bg-gradient-to-r from-gray-50 to-gray-100 border-b border-gray-200">
+              <tr className="bg-linear-to-r from-gray-50 to-gray-100 border-b border-gray-200">
                 <th
                   className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider cursor-pointer hover:bg-gray-100 transition-colors"
                   onClick={() => handleSort('title')}
