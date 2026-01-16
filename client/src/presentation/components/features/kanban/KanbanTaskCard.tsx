@@ -69,9 +69,7 @@ export function KanbanTaskCard({ task }: KanbanTaskCardProps) {
             className="touch-none"
             whileHover={{
                 scale: 1.02,
-                y: -5,
-                rotateY: 5,
-                rotateX: -2,
+                y: -3,
             }}
             whileTap={{
                 scale: 1.05,

@@ -29,11 +29,12 @@ export function FlipCard({
     const x = useMotionValue(0);
     const y = useMotionValue(0);
 
-    const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [10, -10]), {
+    // tilt 효과 약하게 조정 (텍스트 흐림 방지)
+    const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [3, -3]), {
         stiffness: 150,
         damping: 15,
     });
-    const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-10, 10]), {
+    const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-3, 3]), {
         stiffness: 150,
         damping: 15,
     });

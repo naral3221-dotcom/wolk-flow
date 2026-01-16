@@ -2,17 +2,7 @@ import { motion } from 'framer-motion';
 import { Mail, MessageSquare, CheckCircle2, Clock, AlertCircle, MoreHorizontal } from 'lucide-react';
 import { FlipCard, FlipCardFace } from '@/presentation/components/effects/FlipCard';
 import type { Member } from '@/types';
-
-interface MemberWithStats extends Member {
-  taskStats: {
-    todo: number;
-    inProgress: number;
-    review: number;
-    done: number;
-    total: number;
-  };
-  isOnline: boolean;
-}
+import type { MemberWithStats } from '../types';
 
 interface TeamMemberCardProps {
   member: MemberWithStats;
@@ -226,10 +216,13 @@ function getRoleBadgeColor(role?: string): string {
 export function TeamMemberMiniCard({ member }: { member: MemberWithStats }) {
   return (
     <motion.div
-      className="flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/10 transition-colors cursor-pointer"
-      whileHover={{ scale: 1.02, y: -2 }}
+      className="relative flex items-center gap-3 p-3 bg-white/5 rounded-xl border border-white/10 hover:bg-white/8 transition-colors cursor-pointer group overflow-hidden"
       whileTap={{ scale: 0.98 }}
     >
+      {/* 왼쪽 바 강조 효과 */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-neon-violet to-neon-teal scale-y-0 group-hover:scale-y-100 transition-transform duration-200 origin-top"
+      />
       <div className="relative">
         <div className="w-10 h-10 rounded-full overflow-hidden border border-white/20">
           {member.avatarUrl ? (

@@ -1,0 +1,9 @@
+option batch abort
+option confirm off
+open sftp://balancelab23:%40Balance2312%21%40@balancelab.kr:22/ -hostkey=*
+cd /www
+lcd "c:\Users\USER\Desktop\Project\work flow\client\dist"
+put index.html
+cd /www/assets
+put assets\*
+exit

@@ -11,6 +11,7 @@ interface MagneticButtonProps {
     className?: string;
     magneticStrength?: number;
     glowColor?: string;
+    type?: "button" | "submit" | "reset";
 }
 
 export function MagneticButton({
@@ -22,6 +23,7 @@ export function MagneticButton({
     className = "",
     magneticStrength = 0.3,
     glowColor,
+    type = "button",
 }: MagneticButtonProps) {
     const { ref, x, y, scale, handlers } = useMagneticEffect({
         strength: magneticStrength,
@@ -78,6 +80,7 @@ export function MagneticButton({
                 ${className}
             `}
             style={{ x, y, scale }}
+            type={type}
             onClick={onClick}
             disabled={disabled}
             whileTap={{ scale: 0.95 }}

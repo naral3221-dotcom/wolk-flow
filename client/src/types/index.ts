@@ -1,12 +1,48 @@
 export interface Member {
   id: string;
+  username?: string;
   email: string;
   name: string;
   avatarUrl?: string;
   department?: string;
   position?: string;
   role?: Role;
+  userRole?: 'admin' | 'member';  // 시스템 권한
+  mustChangePassword?: boolean;
+  isActive?: boolean;
+  lastLoginAt?: string;
   createdAt?: string;
+}
+
+// 인증 관련 타입
+export interface AuthUser extends Member {
+  userRole: 'admin' | 'member';
+  mustChangePassword: boolean;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: AuthUser;
+  mustChangePassword: boolean;
+}
+
+export interface CreateUserInput {
+  username: string;
+  name: string;
+  password?: string;
+  email?: string;
+  department?: string;
+  position?: string;
+  role?: 'admin' | 'member';
+}
+
+export interface UpdateUserInput {
+  name?: string;
+  email?: string;
+  department?: string;
+  position?: string;
+  role?: 'admin' | 'member';
+  isActive?: boolean;
 }
 
 export interface Role {
@@ -42,6 +78,14 @@ export interface Permission {
   };
 }
 
+// 프로젝트-팀 담당자 매핑
+export interface ProjectTeamAssignment {
+  teamId: string;
+  team?: Team;
+  assigneeIds: string[];
+  assignees?: Member[];
+}
+
 export interface Project {
   id: string;
   name: string;
@@ -50,6 +94,11 @@ export interface Project {
   startDate?: string;
   endDate?: string;
   owner?: Member;
+  teamId?: string;  // 단일 팀 (하위 호환)
+  team?: { id: string; name: string; color: string };  // 단일 팀 (하위 호환)
+  teamIds?: string[];  // 다중 팀
+  teams?: Team[];  // 다중 팀 정보
+  teamAssignments?: ProjectTeamAssignment[];  // 팀별 담당자 매핑
   members?: ProjectMember[];
   labels?: TaskLabel[];
   _count?: { tasks: number };
@@ -146,4 +195,73 @@ export interface TeamProgress {
     done: number;
   };
   total: number;
+}
+
+// Team (팀) 관련 타입
+export interface Team {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  leaderId?: string;
+  leader?: Member;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TeamMemberRole = 'LEADER' | 'MEMBER';
+
+export interface TeamMember {
+  id: string;
+  teamId: string;
+  memberId: string;
+  role: TeamMemberRole;
+  member: Member;
+  joinedAt: string;
+}
+
+export interface CreateTeamInput {
+  name: string;
+  description?: string;
+  color: string;
+  leaderId?: string;
+}
+
+// 루틴 업무 관련 타입
+export type RepeatType = 'daily' | 'weekly' | 'custom';
+
+export interface RoutineTask {
+  id: string;
+  title: string;
+  description?: string;
+  repeatDays: number[];  // 0=일, 1=월, 2=화, 3=수, 4=목, 5=금, 6=토
+  repeatType: RepeatType;
+  projectId?: string;
+  project?: { id: string; name: string };
+  priority: TaskPriority;
+  estimatedMinutes?: number;
+  isActive: boolean;
+  assignees: Member[];
+  isCompletedToday: boolean;
+  recentCompletions: RoutineCompletion[];
+  createdBy: Member;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface RoutineCompletion {
+  date: string;
+  completedAt: string;
+  completedByName: string;
+}
+
+export interface CreateRoutineInput {
+  title: string;
+  description?: string;
+  repeatDays: number[];
+  repeatType: RepeatType;
+  projectId?: string;
+  priority?: TaskPriority;
+  estimatedMinutes?: number;
+  assigneeIds?: string[];
 }

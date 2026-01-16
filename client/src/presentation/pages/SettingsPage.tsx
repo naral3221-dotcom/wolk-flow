@@ -1,20 +1,17 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import {
   User,
-  Bell,
   Palette,
   Shield,
-  Settings,
-  Globe,
   Moon,
   Sparkles,
   Download,
   Upload,
   RotateCcw,
-  Lock,
   Mail,
   Clock,
+  Camera,
 } from "lucide-react";
 import { useSettings } from "@/features/settings/hooks/useSettings";
 import { SettingsSection, SettingsRow, SettingsDivider } from "@/features/settings/components/SettingsSection";
@@ -22,7 +19,7 @@ import { SettingsToggle, SettingsSelect, SettingsButton, SettingsInput } from "@
 import { AnimatedSection, FloatingElement } from "../components/effects/AnimatedSection";
 import { SpatialCard } from "../components/ui/SpatialCard";
 
-type TabId = "profile" | "notifications" | "appearance" | "security";
+type TabId = "profile" | "appearance" | "security";
 
 interface Tab {
   id: TabId;
@@ -32,7 +29,6 @@ interface Tab {
 
 const tabs: Tab[] = [
   { id: "profile", label: "프로필", icon: User },
-  { id: "notifications", label: "알림", icon: Bell },
   { id: "appearance", label: "외관", icon: Palette },
   { id: "security", label: "보안", icon: Shield },
 ];
@@ -42,7 +38,6 @@ export function SettingsPage() {
   const {
     settings,
     loading,
-    updateNotifications,
     updateAppearance,
     updateSecurity,
     resetSettings,
@@ -53,6 +48,30 @@ export function SettingsPage() {
   } = useSettings();
 
   const [profileName, setProfileName] = useState(profile?.name || "");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        alert('이미지 파일만 업로드할 수 있습니다.');
+        return;
+      }
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        alert('파일 크기는 5MB 이하여야 합니다.');
+        return;
+      }
+      // Convert to base64 for local storage
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const base64 = event.target?.result as string;
+        updateProfile({ avatarUrl: base64 });
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   if (loading) {
     return (
@@ -200,9 +219,17 @@ export function SettingsPage() {
               <div className="space-y-6">
                 <SettingsSection title="프로필 정보" description="기본 프로필 정보를 관리하세요" icon={User}>
                   <div className="flex items-center gap-6 mb-6">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="hidden"
+                    />
                     <motion.div
-                      className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white/20"
+                      className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-white/20 cursor-pointer"
                       whileHover={{ scale: 1.05 }}
+                      onClick={() => fileInputRef.current?.click()}
                     >
                       {profile?.avatarUrl ? (
                         <img src={profile.avatarUrl} alt={profile.name} className="w-full h-full object-cover" />
@@ -212,10 +239,10 @@ export function SettingsPage() {
                         </div>
                       )}
                       <motion.div
-                        className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer"
+                        className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
                         whileHover={{ opacity: 1 }}
                       >
-                        <span className="text-xs text-white">변경</span>
+                        <Camera className="w-6 h-6 text-white" />
                       </motion.div>
                     </motion.div>
                     <div>
@@ -224,6 +251,12 @@ export function SettingsPage() {
                       <p className="text-sm text-gray-500 mt-1">
                         {profile?.department} · {profile?.position}
                       </p>
+                      <button
+                        onClick={() => fileInputRef.current?.click()}
+                        className="mt-2 text-xs text-neon-violet hover:text-neon-teal transition-colors"
+                      >
+                        프로필 사진 변경
+                      </button>
                     </div>
                   </div>
 
@@ -253,70 +286,10 @@ export function SettingsPage() {
               </div>
             )}
 
-            {/* Notifications Tab */}
-            {activeTab === "notifications" && (
-              <div className="space-y-6">
-                <SettingsSection title="알림 설정" description="알림 수신 방법을 설정하세요" icon={Bell}>
-                  <SettingsRow label="이메일 알림" description="이메일로 알림을 받습니다">
-                    <SettingsToggle
-                      enabled={settings.notifications.emailNotifications}
-                      onChange={(enabled) => updateNotifications({ emailNotifications: enabled })}
-                    />
-                  </SettingsRow>
-
-                  <SettingsRow label="푸시 알림" description="브라우저 푸시 알림을 받습니다">
-                    <SettingsToggle
-                      enabled={settings.notifications.pushNotifications}
-                      onChange={(enabled) => updateNotifications({ pushNotifications: enabled })}
-                    />
-                  </SettingsRow>
-
-                  <SettingsDivider label="업무 알림" />
-
-                  <SettingsRow label="업무 할당" description="새 업무가 할당되면 알림">
-                    <SettingsToggle
-                      enabled={settings.notifications.taskAssigned}
-                      onChange={(enabled) => updateNotifications({ taskAssigned: enabled })}
-                    />
-                  </SettingsRow>
-
-                  <SettingsRow label="업무 업데이트" description="담당 업무가 수정되면 알림">
-                    <SettingsToggle
-                      enabled={settings.notifications.taskUpdated}
-                      onChange={(enabled) => updateNotifications({ taskUpdated: enabled })}
-                    />
-                  </SettingsRow>
-
-                  <SettingsRow label="업무 완료" description="담당 업무가 완료되면 알림">
-                    <SettingsToggle
-                      enabled={settings.notifications.taskCompleted}
-                      onChange={(enabled) => updateNotifications({ taskCompleted: enabled })}
-                    />
-                  </SettingsRow>
-
-                  <SettingsRow label="멘션" description="댓글에서 멘션되면 알림">
-                    <SettingsToggle
-                      enabled={settings.notifications.mentions}
-                      onChange={(enabled) => updateNotifications({ mentions: enabled })}
-                    />
-                  </SettingsRow>
-
-                  <SettingsDivider />
-
-                  <SettingsRow label="주간 요약" description="매주 월요일 업무 요약 이메일">
-                    <SettingsToggle
-                      enabled={settings.notifications.weeklyDigest}
-                      onChange={(enabled) => updateNotifications({ weeklyDigest: enabled })}
-                    />
-                  </SettingsRow>
-                </SettingsSection>
-              </div>
-            )}
-
             {/* Appearance Tab */}
             {activeTab === "appearance" && (
               <div className="space-y-6">
-                <SettingsSection title="외관 설정" description="앱의 테마와 언어를 설정하세요" icon={Palette}>
+                <SettingsSection title="외관 설정" description="앱의 테마와 효과를 설정하세요" icon={Palette}>
                   <SettingsRow label="테마" description="앱의 색상 테마">
                     <div className="flex items-center gap-2">
                       <Moon className="w-4 h-4 text-gray-400" />
@@ -327,21 +300,6 @@ export function SettingsPage() {
                           { value: "dark", label: "다크" },
                           { value: "light", label: "라이트" },
                           { value: "system", label: "시스템" },
-                        ]}
-                      />
-                    </div>
-                  </SettingsRow>
-
-                  <SettingsRow label="언어" description="앱의 표시 언어">
-                    <div className="flex items-center gap-2">
-                      <Globe className="w-4 h-4 text-gray-400" />
-                      <SettingsSelect
-                        value={settings.appearance.language}
-                        onChange={(language) => updateAppearance({ language })}
-                        options={[
-                          { value: "ko", label: "한국어" },
-                          { value: "en", label: "English" },
-                          { value: "ja", label: "日本語" },
                         ]}
                       />
                     </div>
@@ -380,20 +338,6 @@ export function SettingsPage() {
             {activeTab === "security" && (
               <div className="space-y-6">
                 <SettingsSection title="보안 설정" description="계정 보안을 관리하세요" icon={Shield}>
-                  <SettingsRow label="2단계 인증" description="로그인 시 추가 인증 필요">
-                    <div className="flex items-center gap-3">
-                      <SettingsToggle
-                        enabled={settings.security.twoFactorEnabled}
-                        onChange={(enabled) => updateSecurity({ twoFactorEnabled: enabled })}
-                      />
-                      {settings.security.twoFactorEnabled && (
-                        <span className="text-xs text-emerald-400 bg-emerald-500/20 px-2 py-1 rounded">
-                          활성화됨
-                        </span>
-                      )}
-                    </div>
-                  </SettingsRow>
-
                   <SettingsRow label="세션 타임아웃" description="자동 로그아웃 시간 (분)">
                     <div className="flex items-center gap-2">
                       <Clock className="w-4 h-4 text-gray-400" />
@@ -409,34 +353,6 @@ export function SettingsPage() {
                         ]}
                       />
                     </div>
-                  </SettingsRow>
-
-                  <SettingsDivider label="비밀번호" />
-
-                  <SettingsRow label="비밀번호 변경" description="정기적으로 비밀번호를 변경하세요">
-                    <div className="flex items-center gap-3">
-                      <Lock className="w-4 h-4 text-gray-400" />
-                      <SettingsButton variant="secondary" onClick={() => alert("비밀번호 변경 기능은 준비 중입니다.")}>
-                        변경하기
-                      </SettingsButton>
-                    </div>
-                  </SettingsRow>
-
-                  {settings.security.lastPasswordChange && (
-                    <div className="text-sm text-gray-500">
-                      마지막 변경: {new Date(settings.security.lastPasswordChange).toLocaleDateString("ko-KR")}
-                    </div>
-                  )}
-                </SettingsSection>
-
-                <SettingsSection title="위험 구역" description="주의가 필요한 작업" icon={Settings}>
-                  <SettingsRow label="계정 삭제" description="모든 데이터가 영구적으로 삭제됩니다">
-                    <SettingsButton
-                      variant="danger"
-                      onClick={() => alert("계정 삭제 기능은 준비 중입니다.")}
-                    >
-                      계정 삭제
-                    </SettingsButton>
                   </SettingsRow>
                 </SettingsSection>
               </div>

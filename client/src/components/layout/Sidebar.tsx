@@ -18,7 +18,7 @@ const navigation = [
 ];
 
 export function Sidebar() {
-  const { logout, member } = useAuthStore();
+  const { logout, user: member } = useAuthStore();
 
   return (
     <aside className="flex h-screen w-64 flex-col bg-white border-r border-gray-100 shadow-sm">

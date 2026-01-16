@@ -1,32 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { membersApi, tasksApi } from '@/services/api';
-import type { Member, Task } from '@/types';
-
-interface MemberWithStats extends Member {
-  taskStats: {
-    todo: number;
-    inProgress: number;
-    review: number;
-    done: number;
-    total: number;
-  };
-  isOnline: boolean;
-}
-
-interface TeamData {
-  members: MemberWithStats[];
-  totalMembers: number;
-  activeMembers: number;
-  roleDistribution: { role: string; count: number }[];
-}
-
-interface UseTeamReturn {
-  data: TeamData;
-  loading: boolean;
-  error: Error | null;
-  refetch: () => Promise<void>;
-  getMemberTasks: (memberId: string) => Promise<Task[]>;
-}
+import type { Task } from '@/types';
+import type { MemberWithStats, TeamData, UseTeamReturn } from '../types';
 
 export function useTeam(): UseTeamReturn {
   const [data, setData] = useState<TeamData>({

@@ -1,35 +1,76 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { Member } from '@/types';
+import type { AuthUser } from '@/types';
+import { tokenManager } from '@/services/api';
 
 interface AuthState {
   token: string | null;
-  member: Member | null;
+  user: AuthUser | null;
   isAuthenticated: boolean;
-  login: (token: string, member: Member) => void;
+  mustChangePassword: boolean;
+  login: (token: string, user: AuthUser, mustChangePassword?: boolean) => void;
   logout: () => void;
-  setMember: (member: Member) => void;
+  setUser: (user: AuthUser) => void;
+  setMustChangePassword: (value: boolean) => void;
+  isAdmin: () => boolean;
+  handleAuthExpired: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       token: null,
-      member: null,
+      user: null,
       isAuthenticated: false,
-      login: (token, member) => {
-        localStorage.setItem('token', token);
-        set({ token, member, isAuthenticated: true });
+      mustChangePassword: false,
+
+      login: (token, user, mustChangePassword = false) => {
+        tokenManager.setToken(token);
+        set({
+          token,
+          user,
+          isAuthenticated: true,
+          mustChangePassword,
+        });
       },
+
       logout: () => {
-        localStorage.removeItem('token');
-        set({ token: null, member: null, isAuthenticated: false });
+        tokenManager.removeToken();
+        set({
+          token: null,
+          user: null,
+          isAuthenticated: false,
+          mustChangePassword: false,
+        });
       },
-      setMember: (member) => set({ member }),
+
+      setUser: (user) => set({ user }),
+
+      setMustChangePassword: (value) => set({ mustChangePassword: value }),
+
+      isAdmin: () => get().user?.userRole === 'admin',
+
+      handleAuthExpired: () => {
+        const { logout } = get();
+        logout();
+        // toast 알림은 컴포넌트에서 처리
+      },
     }),
     {
-      name: 'auth-storage',
-      partialize: (state) => ({ token: state.token, member: state.member, isAuthenticated: state.isAuthenticated }),
+      name: 'wf-auth-storage',
+      partialize: (state) => ({
+        token: state.token,
+        user: state.user,
+        isAuthenticated: state.isAuthenticated,
+        mustChangePassword: state.mustChangePassword,
+      }),
     }
   )
 );
+
+// 인증 만료 이벤트 리스너 등록
+if (typeof window !== 'undefined') {
+  window.addEventListener('auth:expired', () => {
+    useAuthStore.getState().handleAuthExpired();
+  });
+}

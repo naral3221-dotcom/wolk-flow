@@ -36,6 +36,7 @@ export const useMemberStore = create<MemberState>((set, get) => ({
   fetchMembers: async () => {
     set({ loading: true, error: null });
     try {
+      // wf_users 테이블에서 사용자 목록 조회 (members API)
       const members = await membersApi.list();
       set({ members, loading: false });
     } catch (error) {

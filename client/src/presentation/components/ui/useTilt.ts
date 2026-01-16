@@ -5,11 +5,12 @@ export function useTilt(stiffness = 150, damping = 15) {
     const x = useMotionValue(0);
     const y = useMotionValue(0);
 
-    const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [4, -4]), {
+    // 회전 강도를 줄여 텍스트 흐림 현상 방지
+    const rotateX = useSpring(useTransform(y, [-0.5, 0.5], [1, -1]), {
         stiffness,
         damping,
     });
-    const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-4, 4]), {
+    const rotateY = useSpring(useTransform(x, [-0.5, 0.5], [-1, 1]), {
         stiffness,
         damping,
     });

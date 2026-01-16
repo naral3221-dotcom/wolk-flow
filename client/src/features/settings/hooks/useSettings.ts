@@ -1,65 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useAuthStore } from '@/stores/authStore';
+import {
+  useSettingsStore,
+  type AppearanceSettings,
+  type SecuritySettings,
+} from '@/stores/settingsStore';
 
-export interface NotificationSettings {
-  emailNotifications: boolean;
-  pushNotifications: boolean;
-  taskAssigned: boolean;
-  taskUpdated: boolean;
-  taskCompleted: boolean;
-  mentions: boolean;
-  weeklyDigest: boolean;
-}
-
-export interface AppearanceSettings {
-  theme: 'dark' | 'light' | 'system';
-  language: 'ko' | 'en' | 'ja';
-  compactMode: boolean;
-  animationsEnabled: boolean;
-  particleEffects: boolean;
-}
-
-export interface SecuritySettings {
-  twoFactorEnabled: boolean;
-  sessionTimeout: number; // minutes
-  lastPasswordChange?: string;
-}
+export type { AppearanceSettings, SecuritySettings };
 
 export interface UserSettings {
-  notifications: NotificationSettings;
   appearance: AppearanceSettings;
   security: SecuritySettings;
 }
 
-const defaultSettings: UserSettings = {
-  notifications: {
-    emailNotifications: true,
-    pushNotifications: true,
-    taskAssigned: true,
-    taskUpdated: true,
-    taskCompleted: true,
-    mentions: true,
-    weeklyDigest: false,
-  },
-  appearance: {
-    theme: 'dark',
-    language: 'ko',
-    compactMode: false,
-    animationsEnabled: true,
-    particleEffects: true,
-  },
-  security: {
-    twoFactorEnabled: false,
-    sessionTimeout: 60,
-  },
-};
-
-const STORAGE_KEY = 'wolk-flow-settings';
-
 interface UseSettingsReturn {
   settings: UserSettings;
   loading: boolean;
-  updateNotifications: (updates: Partial<NotificationSettings>) => void;
   updateAppearance: (updates: Partial<AppearanceSettings>) => void;
   updateSecurity: (updates: Partial<SecuritySettings>) => void;
   resetSettings: () => void;
@@ -76,77 +32,19 @@ interface UseSettingsReturn {
 }
 
 export function useSettings(): UseSettingsReturn {
-  const { member, setMember } = useAuthStore();
-  const [settings, setSettings] = useState<UserSettings>(defaultSettings);
-  const [loading, setLoading] = useState(true);
+  const { user, setUser } = useAuthStore();
+  const {
+    appearance,
+    security,
+    updateAppearance: storeUpdateAppearance,
+    updateSecurity: storeUpdateSecurity,
+    resetSettings: storeResetSettings,
+  } = useSettingsStore();
 
-  // Load settings from localStorage on mount
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        setSettings({
-          ...defaultSettings,
-          ...parsed,
-          notifications: { ...defaultSettings.notifications, ...parsed.notifications },
-          appearance: { ...defaultSettings.appearance, ...parsed.appearance },
-          security: { ...defaultSettings.security, ...parsed.security },
-        });
-      }
-    } catch (err) {
-      console.error('Failed to load settings:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  // Save settings to localStorage whenever they change
-  const saveSettings = useCallback((newSettings: UserSettings) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newSettings));
-    } catch (err) {
-      console.error('Failed to save settings:', err);
-    }
-  }, []);
-
-  const updateNotifications = useCallback((updates: Partial<NotificationSettings>) => {
-    setSettings((prev) => {
-      const newSettings = {
-        ...prev,
-        notifications: { ...prev.notifications, ...updates },
-      };
-      saveSettings(newSettings);
-      return newSettings;
-    });
-  }, [saveSettings]);
-
-  const updateAppearance = useCallback((updates: Partial<AppearanceSettings>) => {
-    setSettings((prev) => {
-      const newSettings = {
-        ...prev,
-        appearance: { ...prev.appearance, ...updates },
-      };
-      saveSettings(newSettings);
-      return newSettings;
-    });
-  }, [saveSettings]);
-
-  const updateSecurity = useCallback((updates: Partial<SecuritySettings>) => {
-    setSettings((prev) => {
-      const newSettings = {
-        ...prev,
-        security: { ...prev.security, ...updates },
-      };
-      saveSettings(newSettings);
-      return newSettings;
-    });
-  }, [saveSettings]);
-
-  const resetSettings = useCallback(() => {
-    setSettings(defaultSettings);
-    saveSettings(defaultSettings);
-  }, [saveSettings]);
+  const settings: UserSettings = {
+    appearance,
+    security,
+  };
 
   const exportSettings = useCallback(() => {
     return JSON.stringify(settings, null, 2);
@@ -155,48 +53,44 @@ export function useSettings(): UseSettingsReturn {
   const importSettings = useCallback((json: string): boolean => {
     try {
       const parsed = JSON.parse(json);
-      const newSettings = {
-        ...defaultSettings,
-        ...parsed,
-        notifications: { ...defaultSettings.notifications, ...parsed.notifications },
-        appearance: { ...defaultSettings.appearance, ...parsed.appearance },
-        security: { ...defaultSettings.security, ...parsed.security },
-      };
-      setSettings(newSettings);
-      saveSettings(newSettings);
+      if (parsed.appearance) {
+        storeUpdateAppearance(parsed.appearance);
+      }
+      if (parsed.security) {
+        storeUpdateSecurity(parsed.security);
+      }
       return true;
     } catch {
       return false;
     }
-  }, [saveSettings]);
+  }, [storeUpdateAppearance, storeUpdateSecurity]);
 
   const updateProfile = useCallback((updates: { name?: string; avatarUrl?: string }) => {
-    if (member) {
-      const updatedMember = {
-        ...member,
+    if (user) {
+      const updatedUser = {
+        ...user,
         ...updates,
       };
-      setMember(updatedMember);
+      setUser(updatedUser);
     }
-  }, [member, setMember]);
+  }, [user, setUser]);
 
-  const profile = member
+  const profile = user
     ? {
-        name: member.name,
-        email: member.email,
-        avatarUrl: member.avatarUrl,
-        department: member.department,
-        position: member.position,
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+        department: user.department,
+        position: user.position,
       }
     : null;
 
   return {
     settings,
-    loading,
-    updateNotifications,
-    updateAppearance,
-    updateSecurity,
-    resetSettings,
+    loading: false, // Store is synchronous after hydration
+    updateAppearance: storeUpdateAppearance,
+    updateSecurity: storeUpdateSecurity,
+    resetSettings: storeResetSettings,
     exportSettings,
     importSettings,
     profile,

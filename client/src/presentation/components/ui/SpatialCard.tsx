@@ -11,7 +11,8 @@ interface SpatialCardProps {
 }
 
 export function SpatialCard({ children, className, onClick, hoverEffect = true }: SpatialCardProps) {
-    const { rotateX, rotateY, onMouseMove, onMouseLeave } = useTilt();
+    // 3D tilt 효과 비활성화 (텍스트 흐림 방지)
+    const { onMouseMove, onMouseLeave } = useTilt();
 
     return (
         <motion.div
@@ -21,25 +22,19 @@ export function SpatialCard({ children, className, onClick, hoverEffect = true }
                 hoverEffect && "cursor-pointer hover:shadow-neon-violet/20",
                 className
             )}
-            style={{
-                transformStyle: "preserve-3d",
-                rotateX: hoverEffect ? rotateX : 0,
-                rotateY: hoverEffect ? rotateY : 0,
-            }}
             onMouseMove={hoverEffect ? onMouseMove : undefined}
             onMouseLeave={hoverEffect ? onMouseLeave : undefined}
             onClick={onClick}
-            whileHover={hoverEffect ? { scale: 1.02, z: 20 } : undefined}
+            whileHover={hoverEffect ? { scale: 1.01 } : undefined}
             transition={{ type: "spring", stiffness: 300, damping: 20 }}
         >
             {/* Glossy Reflection Gradient */}
             <div
                 className="absolute inset-0 bg-linear-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                style={{ transform: "translateZ(1px)" }}
             />
 
             {/* Content Layer */}
-            <div className="relative z-10" style={{ transform: "translateZ(20px)" }}>
+            <div className="relative z-10">
                 {children}
             </div>
 

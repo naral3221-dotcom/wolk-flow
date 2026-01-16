@@ -1,14 +1,41 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { dashboardApi } from '@/services/api';
 import { useTaskStore } from '@/stores/taskStore';
 import { useProjectStore } from '@/stores/projectStore';
 import { useMemberStore } from '@/stores/memberStore';
-import type { DashboardStats, Task, TeamProgress, ActivityLog } from '@/types';
+import { useAuthStore } from '@/stores/authStore';
+import type { DashboardStats, Task, TeamProgress, ActivityLog, Project } from '@/types';
+
+export interface ProjectStats {
+  total: number;
+  active: number;
+  completed: number;
+  onHold: number;
+  overdue: number;
+}
+
+// 멤버별 업무 정보
+export interface MemberWithTasks {
+  id: string;
+  name: string;
+  avatarUrl?: string;
+  tasks: Task[];
+  taskStats: {
+    todo: number;
+    inProgress: number;
+    review: number;
+    done: number;
+  };
+}
 
 interface DashboardData {
-  stats: DashboardStats | null;
+  stats: DashboardStats;
+  projectStats: ProjectStats;
+  projects: Project[];
+  allTasks: Task[];
   myTasks: Task[];
   teamProgress: TeamProgress[];
+  memberProgress: MemberWithTasks[];
   activities: ActivityLog[];
 }
 
@@ -20,63 +47,139 @@ interface UseDashboardReturn {
 }
 
 export function useDashboard(): UseDashboardReturn {
-  // Store의 tasks를 구독하여 변경 시 자동 갱신
+  // Store 데이터를 Single Source of Truth로 사용
   const storeTasks = useTaskStore((state) => state.tasks);
   const storeProjects = useProjectStore((state) => state.projects);
   const storeMembers = useMemberStore((state) => state.members);
+  const { user } = useAuthStore();
 
-  const [data, setData] = useState<DashboardData>({
-    stats: null,
-    myTasks: [],
+  const [additionalData, setAdditionalData] = useState<{
+    teamProgress: TeamProgress[];
+    activities: ActivityLog[];
+  }>({
     teamProgress: [],
     activities: [],
   });
-  const [loading, setLoading] = useState(true);
+  const [additionalLoading, setAdditionalLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
 
-  const fetchDashboard = useCallback(async () => {
+  // 대시보드 전용 추가 데이터만 API로 가져옴 (teamProgress, activities)
+  // stats는 Store에서 계산하므로 API 호출 제거
+  const fetchAdditionalData = useCallback(async () => {
     try {
-      setLoading(true);
+      setAdditionalLoading(true);
       setError(null);
 
-      const [stats, myTasks, teamProgress, activities] = await Promise.all([
-        dashboardApi.summary(),
-        dashboardApi.myTasks(),
+      const [teamProgress, activities] = await Promise.all([
         dashboardApi.teamProgress(),
         dashboardApi.recentActivities(),
       ]);
 
-      setData({
-        stats,
-        myTasks,
-        teamProgress,
-        activities,
-      });
+      setAdditionalData({ teamProgress, activities });
     } catch (err) {
       console.error('Dashboard fetch error:', err);
       setError(err instanceof Error ? err : new Error('Failed to fetch dashboard data'));
     } finally {
-      setLoading(false);
+      setAdditionalLoading(false);
     }
   }, []);
 
-  // 최초 로드
+  // 최초 로드 시에만 추가 데이터 가져옴
   useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+    fetchAdditionalData();
+  }, [fetchAdditionalData]);
 
-  // Store 데이터 변경 시 자동 갱신
-  useEffect(() => {
-    // 최초 로드 이후에만 갱신 (storeTasks가 비어있지 않을 때)
-    if (storeTasks.length > 0 || storeProjects.length > 0 || storeMembers.length > 0) {
-      fetchDashboard();
-    }
-  }, [storeTasks, storeProjects, storeMembers, fetchDashboard]);
+  // 업무 통계: Store에서 직접 계산 (모든 페이지와 동기화)
+  const stats = useMemo((): DashboardStats => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    return {
+      total: storeTasks.length,
+      todo: storeTasks.filter((t) => t.status === 'TODO').length,
+      inProgress: storeTasks.filter((t) => t.status === 'IN_PROGRESS').length,
+      review: storeTasks.filter((t) => t.status === 'REVIEW').length,
+      done: storeTasks.filter((t) => t.status === 'DONE').length,
+      overdue: storeTasks.filter((t) => {
+        if (!t.dueDate || t.status === 'DONE') return false;
+        return new Date(t.dueDate) < today;
+      }).length,
+      projects: storeProjects.length,
+      members: storeMembers.length,
+    };
+  }, [storeTasks, storeProjects.length, storeMembers.length]);
+
+  // 프로젝트 통계: Store에서 직접 계산
+  const projectStats = useMemo((): ProjectStats => {
+    const now = new Date();
+    return {
+      total: storeProjects.length,
+      active: storeProjects.filter((p) => p.status === 'ACTIVE').length,
+      completed: storeProjects.filter((p) => p.status === 'COMPLETED').length,
+      onHold: storeProjects.filter((p) => p.status === 'ON_HOLD').length,
+      overdue: storeProjects.filter((p) => {
+        if (!p.endDate || p.status === 'COMPLETED') return false;
+        return new Date(p.endDate) < now;
+      }).length,
+    };
+  }, [storeProjects]);
+
+  // 내 업무: Store에서 직접 필터링
+  const myTasks = useMemo((): Task[] => {
+    if (!user?.id) return [];
+    return storeTasks.filter((task) => {
+      if (task.assignees?.some((a) => a.id === user.id)) return true;
+      if (task.assignee?.id === user.id) return true;
+      return false;
+    });
+  }, [storeTasks, user?.id]);
+
+  // 멤버별 업무 현황: Store에서 계산
+  const memberProgress = useMemo((): MemberWithTasks[] => {
+    return storeMembers.map((member) => {
+      // 해당 멤버가 담당하는 업무 찾기
+      const memberTasks = storeTasks.filter((task) => {
+        if (task.assignees?.some((a) => a.id === member.id)) return true;
+        if (task.assignee?.id === member.id) return true;
+        return false;
+      });
+
+      return {
+        id: member.id,
+        name: member.name,
+        avatarUrl: member.avatarUrl,
+        tasks: memberTasks,
+        taskStats: {
+          todo: memberTasks.filter((t) => t.status === 'TODO').length,
+          inProgress: memberTasks.filter((t) => t.status === 'IN_PROGRESS').length,
+          review: memberTasks.filter((t) => t.status === 'REVIEW').length,
+          done: memberTasks.filter((t) => t.status === 'DONE').length,
+        },
+      };
+    }).sort((a, b) => {
+      // 진행중인 업무가 많은 멤버 순으로 정렬
+      const aActive = a.taskStats.inProgress + a.taskStats.review;
+      const bActive = b.taskStats.inProgress + b.taskStats.review;
+      return bActive - aActive;
+    });
+  }, [storeMembers, storeTasks]);
+
+  // 최종 데이터
+  const data = useMemo((): DashboardData => ({
+    stats,
+    projectStats,
+    projects: storeProjects,
+    allTasks: storeTasks,
+    myTasks,
+    teamProgress: additionalData.teamProgress,
+    memberProgress,
+    activities: additionalData.activities,
+  }), [stats, projectStats, storeProjects, storeTasks, myTasks, memberProgress, additionalData]);
 
   return {
     data,
-    loading,
+    loading: additionalLoading,
     error,
-    refetch: fetchDashboard,
+    refetch: fetchAdditionalData,
   };
 }

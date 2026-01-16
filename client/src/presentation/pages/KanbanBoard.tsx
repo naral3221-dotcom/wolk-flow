@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
     DndContext,
@@ -14,85 +14,78 @@ import {
 import { SortableContext, arrayMove } from "@dnd-kit/sortable";
 import { createPortal } from "react-dom";
 
-import { KanbanColumn } from "@/presentation/components/features/kanban/KanbanColumn";
-import { KanbanTaskCard } from "@/presentation/components/features/kanban/KanbanTaskCard";
-import type { Column } from "@/domain/entities/Column";
 import type { Task as SpatialTask } from "@/domain/entities/Task";
-import { Plus, Sparkles } from "lucide-react";
-import type { Task as ApiTask, TaskStatus } from "@/types";
-import { AnimatedSection, FloatingElement } from "@/presentation/components/effects/AnimatedSection";
-import { MagneticButton } from "@/presentation/components/effects/MagneticButton";
 import { useTaskStore } from "@/stores/taskStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useUIStore } from "@/stores/uiStore";
 
-// Status 매핑 함수
-const statusToSpatial = (status: TaskStatus): SpatialTask['status'] => {
-    const map: Record<TaskStatus, SpatialTask['status']> = {
-        'TODO': 'todo',
-        'IN_PROGRESS': 'in-progress',
-        'REVIEW': 'review',
-        'DONE': 'done'
-    };
-    return map[status];
-};
-
-const spatialToStatus = (status: SpatialTask['status']): TaskStatus => {
-    const map: Record<SpatialTask['status'], TaskStatus> = {
-        'todo': 'TODO',
-        'in-progress': 'IN_PROGRESS',
-        'review': 'REVIEW',
-        'done': 'DONE'
-    };
-    return map[status];
-};
-
-// API Task를 Spatial Task로 변환
-const convertToSpatialTask = (task: ApiTask): SpatialTask => ({
-    id: task.id,
-    projectId: task.projectId,
-    title: task.title,
-    content: task.description,
-    status: statusToSpatial(task.status),
-    priority: task.priority.toLowerCase() as SpatialTask['priority'],
-    assigneeId: task.assignee?.id,
-    assigneeIds: task.assignees?.map(a => a.id) || (task.assignee ? [task.assignee.id] : undefined),
-    startDate: task.startDate ? new Date(task.startDate) : undefined,
-    dueDate: task.dueDate ? new Date(task.dueDate) : undefined,
-    tags: task.labels?.map(l => l.label.name) || [],
-    createdAt: new Date(task.createdAt),
-});
-
-// 기본 컬럼 정의
-const DEFAULT_COLUMNS: Column[] = [
-    { id: "TODO", projectId: "", title: "할 일", order: 0 },
-    { id: "IN_PROGRESS", projectId: "", title: "진행 중", order: 1 },
-    { id: "REVIEW", projectId: "", title: "검토", order: 2 },
-    { id: "DONE", projectId: "", title: "완료", order: 3 },
-];
+import {
+    KanbanHeader,
+    KanbanLoading,
+    KanbanColumn,
+    KanbanTaskCard,
+    convertToSpatialTask,
+    spatialToStatus,
+    DEFAULT_COLUMNS,
+} from "@/features/kanban";
+import { RoutineStatusBar } from "@/presentation/components/ui/RoutineStatusBar";
 
 export function KanbanBoard() {
-    const [columns] = useState<Column[]>(DEFAULT_COLUMNS);
+    const [columns] = useState(DEFAULT_COLUMNS);
     const { tasks: storeTasks, loading, updateTaskStatus } = useTaskStore();
     const { projects } = useProjectStore();
-    const { openCreateTaskModal } = useUIStore();
+    const {
+        selectedProjectId,
+        showAllProjects,
+        setSelectedProjectId,
+        setShowAllProjects,
+        openCreateTaskModal
+    } = useUIStore();
 
-    // Store의 tasks를 SpatialTask로 변환 (useMemo로 파생)
+    // 활성 프로젝트만 필터링
+    const activeProjects = useMemo(() => {
+        return projects.filter(p => p.status === 'ACTIVE');
+    }, [projects]);
+
+    // 첫 로드 시 전체 프로젝트 보기로 설정 (또는 첫 번째 활성 프로젝트 선택)
+    useEffect(() => {
+        if (!selectedProjectId && !showAllProjects && activeProjects.length > 0) {
+            // 기본적으로 전체 프로젝트 보기
+            setShowAllProjects(true);
+        }
+    }, [activeProjects, selectedProjectId, showAllProjects, setShowAllProjects]);
+
+    // 선택된 프로젝트에 따라 태스크 필터링
+    const filteredStoreTasks = useMemo(() => {
+        if (showAllProjects) {
+            // 전체 프로젝트 보기: 활성 프로젝트의 태스크만 표시
+            const activeProjectIds = new Set(activeProjects.map(p => p.id));
+            return storeTasks.filter(task => activeProjectIds.has(task.projectId));
+        }
+        if (selectedProjectId) {
+            // 특정 프로젝트 선택: 해당 프로젝트의 태스크만 표시
+            return storeTasks.filter(task => task.projectId === selectedProjectId);
+        }
+        return [];
+    }, [storeTasks, selectedProjectId, showAllProjects, activeProjects]);
+
+    // Store의 tasks를 SpatialTask로 변환
     const tasks = useMemo(() => {
-        return storeTasks.map(convertToSpatialTask);
-    }, [storeTasks]);
+        return filteredStoreTasks.map(convertToSpatialTask);
+    }, [filteredStoreTasks]);
 
-    // 드래그 중 로컬 상태 (UI용)
+    // 드래그 중 로컬 상태
     const [localTasks, setLocalTasks] = useState<SpatialTask[]>([]);
+    const [isDragging, setIsDragging] = useState(false);
 
-    // Store tasks가 변경될 때 localTasks 동기화
-    useMemo(() => {
-        setLocalTasks(tasks);
-    }, [tasks]);
+    // Store tasks가 변경될 때 localTasks 동기화 (드래그 중이 아닐 때만)
+    useEffect(() => {
+        if (!isDragging) {
+            setLocalTasks(tasks);
+        }
+    }, [tasks, isDragging]);
 
-    const projectName = projects[0]?.name || "프로젝트";
-
-    const [activeColumn, setActiveColumn] = useState<Column | null>(null);
+    const [activeColumn, setActiveColumn] = useState<typeof columns[0] | null>(null);
     const [activeTask, setActiveTask] = useState<SpatialTask | null>(null);
 
     const sensors = useSensors(
@@ -118,6 +111,7 @@ export function KanbanBoard() {
 
     // 드래그 핸들러
     const onDragStart = (event: DragStartEvent) => {
+        setIsDragging(true);
         if (event.active.data.current?.type === "Column") {
             setActiveColumn(event.active.data.current.column);
             return;
@@ -133,12 +127,20 @@ export function KanbanBoard() {
         setActiveTask(null);
 
         const { active, over } = event;
-        if (!over) return;
+
+        // 드래그가 취소된 경우 (over가 없음)
+        if (!over) {
+            setIsDragging(false);
+            return;
+        }
 
         const activeId = active.id;
         const overId = over.id;
 
-        if (activeId === overId) return;
+        if (activeId === overId) {
+            setIsDragging(false);
+            return;
+        }
 
         // 태스크 드래그 완료 시 Store 업데이트
         if (active.data.current?.type === "Task") {
@@ -149,9 +151,13 @@ export function KanbanBoard() {
                     await updateTaskStatus(task.id, newStatus);
                 } catch (error) {
                     console.error('Failed to update task status:', error);
+                    // 에러 발생 시 localTasks를 store 상태로 복원
+                    setLocalTasks(tasks);
                 }
             }
         }
+
+        setIsDragging(false);
     };
 
     const onDragOver = (event: DragOverEvent) => {
@@ -210,24 +216,18 @@ export function KanbanBoard() {
         }
     };
 
+    // 새 업무 추가 핸들러
+    const handleAddTask = () => {
+        if (showAllProjects && activeProjects.length > 0) {
+            // 전체 프로젝트 보기에서는 첫 번째 활성 프로젝트에 추가
+            openCreateTaskModal(activeProjects[0].id);
+        } else if (selectedProjectId) {
+            openCreateTaskModal(selectedProjectId);
+        }
+    };
+
     if (loading) {
-        return (
-            <div className="flex h-full items-center justify-center">
-                <FloatingElement floatIntensity={15} rotateIntensity={5}>
-                    <div className="flex flex-col items-center gap-4">
-                        <motion.div
-                            className="h-16 w-16 rounded-full border-4 border-neon-violet border-t-transparent"
-                            animate={{ rotate: 360 }}
-                            transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                        />
-                        <div className="flex items-center gap-2">
-                            <Sparkles className="w-4 h-4 text-neon-violet animate-pulse" />
-                            <p className="text-gray-400 animate-pulse">칸반 보드를 준비하는 중...</p>
-                        </div>
-                    </div>
-                </FloatingElement>
-            </div>
-        );
+        return <KanbanLoading />;
     }
 
     return (
@@ -237,31 +237,18 @@ export function KanbanBoard() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5 }}
         >
-            <AnimatedSection animation="fadeInDown" className="shrink-0 mb-8">
-                <header className="flex justify-between items-center">
-                    <div>
-                        <FloatingElement floatIntensity={3} rotateIntensity={1} duration={6}>
-                            <motion.h1
-                                className="text-3xl font-bold text-white mb-1"
-                                initial={{ opacity: 0, x: -20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                            >
-                                {projectName}
-                            </motion.h1>
-                        </FloatingElement>
-                        <p className="text-gray-400 text-sm">드래그하여 업무 상태를 변경하세요.</p>
-                    </div>
-                    <MagneticButton
-                        variant="neon"
-                        size="md"
-                        magneticStrength={0.4}
-                        glowColor="#00FFFF"
-                        onClick={() => openCreateTaskModal(projects[0]?.id)}
-                    >
-                        <Plus className="w-4 h-4" /> 새 업무 추가
-                    </MagneticButton>
-                </header>
-            </AnimatedSection>
+            <KanbanHeader
+                projects={projects}
+                selectedProjectId={selectedProjectId}
+                showAllProjects={showAllProjects}
+                onProjectSelect={setSelectedProjectId}
+                onShowAllToggle={setShowAllProjects}
+                onAddTask={handleAddTask}
+                taskCount={localTasks.length}
+            />
+
+            {/* 루틴 현황 바 */}
+            <RoutineStatusBar projectId={showAllProjects ? undefined : (selectedProjectId ?? undefined)} />
 
             <DndContext
                 sensors={sensors}

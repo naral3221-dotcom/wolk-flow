@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Task, TaskStatus, TaskPriority } from '@/types';
 import { tasksApi } from '@/services/api';
+import { toast } from '@/stores/toastStore';
 
 export interface CreateTaskInput {
   projectId: string;
@@ -12,6 +13,7 @@ export interface CreateTaskInput {
   assigneeIds?: string[];  // 다중 담당자
   startDate?: string;
   dueDate?: string;
+  parentId?: string;  // 하위 업무 생성 시 상위 업무 ID
 }
 
 interface TaskState {
@@ -44,7 +46,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       const tasks = await tasksApi.list(projectId ? { projectId } : undefined);
       set({ tasks, loading: false });
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      const message = (error as Error).message;
+      set({ error: message, loading: false });
+      toast.error('업무 목록 로드 실패', message);
     }
   },
 
@@ -52,13 +56,38 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const newTask = await tasksApi.create(data);
-      set((state) => ({
-        tasks: [...state.tasks, newTask],
-        loading: false,
-      }));
+
+      // 하위 업무인 경우 부모 업무의 subtasks에 추가
+      if (data.parentId) {
+        set((state) => ({
+          tasks: state.tasks.map((task) => {
+            if (task.id === data.parentId) {
+              return {
+                ...task,
+                subtasks: [...(task.subtasks || []), newTask],
+                _count: {
+                  subtasks: (task._count?.subtasks || 0) + 1,
+                  comments: task._count?.comments || 0,
+                },
+              };
+            }
+            return task;
+          }),
+          loading: false,
+        }));
+      } else {
+        // 일반 업무인 경우 tasks 배열에 추가
+        set((state) => ({
+          tasks: [...state.tasks, newTask],
+          loading: false,
+        }));
+      }
+      toast.success('업무 추가 완료', `"${newTask.title}" 업무가 생성되었습니다.`);
       return newTask;
     } catch (error) {
-      set({ error: (error as Error).message, loading: false });
+      const message = (error as Error).message;
+      set({ error: message, loading: false });
+      toast.error('업무 추가 실패', message);
       throw error;
     }
   },
@@ -66,18 +95,55 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   updateTask: async (id: string, data: Partial<Task> & { assigneeIds?: string[] }) => {
     const previousTasks = get().tasks;
 
-    // Optimistic update
+    // Optimistic update - 최상위 tasks와 subtasks 모두 확인
     set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === id ? { ...task, ...data, updatedAt: new Date().toISOString() } : task
-      ),
+      tasks: state.tasks.map((task) => {
+        // 최상위 task인 경우
+        if (task.id === id) {
+          return { ...task, ...data, updatedAt: new Date().toISOString() };
+        }
+        // subtask인 경우
+        if (task.subtasks) {
+          const updatedSubtasks = task.subtasks.map((subtask) =>
+            subtask.id === id ? { ...subtask, ...data, updatedAt: new Date().toISOString() } : subtask
+          );
+          // subtask가 변경되었는지 확인
+          if (updatedSubtasks.some((st, idx) => st !== task.subtasks![idx])) {
+            return { ...task, subtasks: updatedSubtasks };
+          }
+        }
+        return task;
+      }),
     }));
 
     try {
-      await tasksApi.update(id, data);
+      const updatedTask = await tasksApi.update(id, data);
+
+      // 서버 응답으로 store 업데이트 (정확한 데이터 동기화)
+      set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id === id) {
+            return updatedTask;
+          }
+          // subtask인 경우
+          if (task.subtasks) {
+            const updatedSubtasks = task.subtasks.map((subtask) =>
+              subtask.id === id ? updatedTask : subtask
+            );
+            if (updatedSubtasks.some((st, idx) => st !== task.subtasks![idx])) {
+              return { ...task, subtasks: updatedSubtasks };
+            }
+          }
+          return task;
+        }),
+      }));
+
+      toast.success('업무 수정 완료', '업무가 성공적으로 수정되었습니다.');
     } catch (error) {
       // Rollback on error
-      set({ tasks: previousTasks, error: (error as Error).message });
+      const message = (error as Error).message;
+      set({ tasks: previousTasks, error: message });
+      toast.error('업무 수정 실패', message);
       throw error;
     }
   },
@@ -85,18 +151,54 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   updateTaskStatus: async (id: string, status: TaskStatus) => {
     const previousTasks = get().tasks;
 
-    // Optimistic update
+    // Optimistic update - 최상위 tasks와 subtasks 모두 확인
     set((state) => ({
-      tasks: state.tasks.map((task) =>
-        task.id === id ? { ...task, status, updatedAt: new Date().toISOString() } : task
-      ),
+      tasks: state.tasks.map((task) => {
+        // 최상위 task인 경우
+        if (task.id === id) {
+          return { ...task, status, updatedAt: new Date().toISOString() };
+        }
+        // subtask인 경우
+        if (task.subtasks) {
+          const updatedSubtasks = task.subtasks.map((subtask) =>
+            subtask.id === id ? { ...subtask, status, updatedAt: new Date().toISOString() } : subtask
+          );
+          // subtask가 변경되었는지 확인
+          if (updatedSubtasks.some((st, idx) => st !== task.subtasks![idx])) {
+            return { ...task, subtasks: updatedSubtasks };
+          }
+        }
+        return task;
+      }),
     }));
 
     try {
-      await tasksApi.updateStatus(id, status);
+      // API 호출 후 서버 응답으로 store 업데이트
+      const updatedTask = await tasksApi.updateStatus(id, status);
+
+      // 서버 응답으로 해당 task 업데이트 (정확한 데이터 동기화)
+      set((state) => ({
+        tasks: state.tasks.map((task) => {
+          if (task.id === id) {
+            return updatedTask;
+          }
+          // subtask인 경우
+          if (task.subtasks) {
+            const updatedSubtasks = task.subtasks.map((subtask) =>
+              subtask.id === id ? updatedTask : subtask
+            );
+            if (updatedSubtasks.some((st, idx) => st !== task.subtasks![idx])) {
+              return { ...task, subtasks: updatedSubtasks };
+            }
+          }
+          return task;
+        }),
+      }));
     } catch (error) {
       // Rollback on error
-      set({ tasks: previousTasks, error: (error as Error).message });
+      const message = (error as Error).message;
+      set({ tasks: previousTasks, error: message });
+      toast.error('상태 변경 실패', message);
       throw error;
     }
   },
@@ -111,9 +213,12 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     try {
       await tasksApi.delete(id);
+      toast.success('업무 삭제 완료', '업무가 삭제되었습니다.');
     } catch (error) {
       // Rollback on error
-      set({ tasks: previousTasks, error: (error as Error).message });
+      const message = (error as Error).message;
+      set({ tasks: previousTasks, error: message });
+      toast.error('업무 삭제 실패', message);
       throw error;
     }
   },
