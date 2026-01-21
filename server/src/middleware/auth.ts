@@ -46,7 +46,7 @@ export const authenticate = async (
       id: member.id,
       email: member.email,
       roleId: member.roleId,
-      permissions: member.role.permissions as Permission
+      permissions: member.role.permissions as unknown as Permission
     };
 
     next();
@@ -65,7 +65,7 @@ export const checkPermission = (
     }
 
     const [category, action] = permissionPath.split('.');
-    const permissions = req.member.permissions as Record<string, Record<string, boolean>>;
+    const permissions = req.member.permissions as unknown as Record<string, Record<string, boolean>>;
 
     if (!permissions[category] || !permissions[category][action]) {
       res.status(403).json({ error: '권한이 없습니다.' });

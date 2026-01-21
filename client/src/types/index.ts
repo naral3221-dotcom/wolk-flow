@@ -265,3 +265,88 @@ export interface CreateRoutineInput {
   estimatedMinutes?: number;
   assigneeIds?: string[];
 }
+
+// ==================== 회의자료 게시판 타입 ====================
+
+export type MeetingStatus = 'DRAFT' | 'PUBLISHED';
+
+export interface Meeting {
+  id: number;
+  title: string;
+  meetingDate: string;
+  location?: string;
+  projectId?: number;
+  project?: { id: number; name: string };
+  content: string;
+  summary?: string;
+  authorId: number;
+  author: Member;
+  attendees: MeetingAttendee[];
+  attachments?: MeetingAttachment[];
+  comments?: MeetingComment[];
+  status: MeetingStatus;
+  _count?: { attachments?: number; comments?: number };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MeetingAttendee {
+  id: number;
+  meetingId: number;
+  memberId: number;
+  member: Member;
+  createdAt: string;
+}
+
+export interface MeetingAttachment {
+  id: number;
+  meetingId: number;
+  fileName: string;
+  storedName: string;
+  filePath: string;
+  fileSize: number;
+  mimeType: string;
+  uploadedAt: string;
+}
+
+export interface MeetingComment {
+  id: number;
+  meetingId: number;
+  authorId: number;
+  content: string;
+  author: Member;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateMeetingInput {
+  title: string;
+  meetingDate: string;
+  location?: string;
+  projectId?: number;
+  content: string;
+  summary?: string;
+  attendeeIds: number[];
+  status?: MeetingStatus;
+}
+
+export interface UpdateMeetingInput {
+  title?: string;
+  meetingDate?: string;
+  location?: string;
+  projectId?: number;
+  content?: string;
+  summary?: string;
+  attendeeIds?: number[];
+  status?: MeetingStatus;
+}
+
+export interface MeetingFilters {
+  projectId?: number;
+  authorId?: number;
+  attendeeId?: number;
+  status?: MeetingStatus;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+}

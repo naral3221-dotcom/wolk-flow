@@ -184,3 +184,70 @@ enum TaskPriority {
   HIGH
   URGENT
 }
+
+// ==================== 회의자료 게시판 모델 ====================
+
+enum MeetingStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model Meeting {
+  id          Int           @id @default(autoincrement())
+  title       String
+  meetingDate DateTime      @map("meeting_date")
+  location    String?
+  projectId   Int?          @map("project_id")
+  content     String        @db.LongText
+  summary     String?       @db.Text
+  authorId    Int           @map("author_id")
+  status      MeetingStatus @default(DRAFT)
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  attendees   MeetingAttendee[]
+  attachments MeetingAttachment[]
+  comments    MeetingComment[]
+
+  @@map("wf_meetings")
+}
+
+model MeetingAttendee {
+  id        Int      @id @default(autoincrement())
+  meetingId Int      @map("meeting_id")
+  memberId  Int      @map("member_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, memberId])
+  @@map("wf_meeting_attendees")
+}
+
+model MeetingAttachment {
+  id         Int      @id @default(autoincrement())
+  meetingId  Int      @map("meeting_id")
+  fileName   String   @map("file_name")
+  storedName String   @map("stored_name")
+  filePath   String   @map("file_path")
+  fileSize   Int      @map("file_size")
+  mimeType   String   @map("mime_type")
+  uploadedAt DateTime @default(now()) @map("uploaded_at")
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@map("wf_meeting_attachments")
+}
+
+model MeetingComment {
+  id        Int      @id @default(autoincrement())
+  meetingId Int      @map("meeting_id")
+  authorId  Int      @map("author_id")
+  content   String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  meeting Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+
+  @@map("wf_meeting_comments")
+}

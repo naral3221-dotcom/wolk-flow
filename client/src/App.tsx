@@ -9,6 +9,7 @@ import { ProjectsPage } from "@/presentation/pages/ProjectsPage";
 import { TeamPage } from "@/presentation/pages/TeamPage";
 import { SettingsPage } from "@/presentation/pages/SettingsPage";
 import { AdminPage } from "@/presentation/pages/AdminPage";
+import { MeetingsPage } from "@/presentation/pages/MeetingsPage";
 import { SpatialCard } from "@/presentation/components/ui/SpatialCard";
 import { ToastContainer } from "@/presentation/components/ui/Toast";
 import { ModalProvider } from "@/presentation/components/modals";
@@ -75,6 +76,7 @@ function AuthenticatedApp() {
             <Route path="/tasks" element={<KanbanBoard />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/team" element={<TeamPage />} />
+            <Route path="/meetings" element={<MeetingsPage />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/admin" element={
               <AdminRoute>

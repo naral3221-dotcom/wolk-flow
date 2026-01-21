@@ -7,6 +7,8 @@ import { ConfirmModal } from './ConfirmModal';
 import { SpatialTeamModal } from './SpatialTeamModal';
 import { TeamMemberModal } from './TeamMemberModal';
 import { RoutineModalWrapper } from './RoutineModalWrapper';
+import { MeetingFormModal } from './MeetingFormModal';
+import { MeetingDetailModal } from './MeetingDetailModal';
 import { ContextMenu } from '../context-menu';
 
 interface ModalProviderProps {
@@ -25,6 +27,8 @@ export function ModalProvider({ children }: ModalProviderProps) {
       <SpatialTeamModal />
       <TeamMemberModal />
       <RoutineModalWrapper />
+      <MeetingFormModal />
+      <MeetingDetailModal />
       <ContextMenu />
     </>
   );

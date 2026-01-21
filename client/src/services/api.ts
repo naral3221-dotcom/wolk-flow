@@ -7,7 +7,7 @@ import {
   mockTeams,
   mockTeamMembers,
 } from './mockData';
-import type { Member, Project, Task, TaskStatus, TaskPriority, Team, TeamMember, TeamMemberRole, CreateTeamInput, AuthUser, CreateUserInput, UpdateUserInput, RoutineTask, CreateRoutineInput } from '@/types';
+import type { Member, Project, Task, TaskStatus, TaskPriority, Team, TeamMember, TeamMemberRole, CreateTeamInput, AuthUser, CreateUserInput, UpdateUserInput, RoutineTask, CreateRoutineInput, Meeting, MeetingComment, MeetingAttachment, MeetingAttendee, CreateMeetingInput, UpdateMeetingInput, MeetingFilters } from '@/types';
 
 // 환경변수 기반 설정
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === 'true';
@@ -1531,5 +1531,337 @@ export const routineTasksApi = {
       return { success: true, completed: false, date: new Date().toISOString().split('T')[0] };
     }
     return api.patch(`/routine_tasks.php?id=${id}&action=uncomplete`, {});
+  },
+};
+
+// Meetings (회의자료 게시판)
+export const meetingsApi = {
+  // 회의자료 목록
+  list: async (filters?: MeetingFilters): Promise<Meeting[]> => {
+    if (USE_MOCK) {
+      await delay(300);
+      // Mock: localStorage에서 로드 (추후 mockData에 추가 가능)
+      const stored = localStorage.getItem('workflow_meetings');
+      let meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+
+      // 필터 적용
+      if (filters) {
+        if (filters.projectId) {
+          meetings = meetings.filter(m => m.projectId === filters.projectId);
+        }
+        if (filters.authorId) {
+          meetings = meetings.filter(m => m.authorId === filters.authorId);
+        }
+        if (filters.status) {
+          meetings = meetings.filter(m => m.status === filters.status);
+        }
+        if (filters.search) {
+          const searchLower = filters.search.toLowerCase();
+          meetings = meetings.filter(m =>
+            m.title.toLowerCase().includes(searchLower) ||
+            m.content.toLowerCase().includes(searchLower) ||
+            m.summary?.toLowerCase().includes(searchLower)
+          );
+        }
+        if (filters.startDate) {
+          meetings = meetings.filter(m => new Date(m.meetingDate) >= new Date(filters.startDate!));
+        }
+        if (filters.endDate) {
+          meetings = meetings.filter(m => new Date(m.meetingDate) <= new Date(filters.endDate!));
+        }
+      }
+
+      return meetings.sort((a, b) => new Date(b.meetingDate).getTime() - new Date(a.meetingDate).getTime());
+    }
+
+    // PHP 백엔드: /meetings.php?projectId=X&status=Y...
+    const searchParams = new URLSearchParams();
+    if (filters?.projectId) searchParams.set('projectId', String(filters.projectId));
+    if (filters?.authorId) searchParams.set('authorId', String(filters.authorId));
+    if (filters?.status) searchParams.set('status', filters.status);
+    if (filters?.search) searchParams.set('search', filters.search);
+    if (filters?.startDate) searchParams.set('startDate', filters.startDate);
+    if (filters?.endDate) searchParams.set('endDate', filters.endDate);
+    const query = searchParams.toString();
+    return api.get(`/meetings.php${query ? `?${query}` : ''}`);
+  },
+
+  // 회의자료 상세
+  get: async (id: number): Promise<Meeting> => {
+    if (USE_MOCK) {
+      await delay(200);
+      const stored = localStorage.getItem('workflow_meetings');
+      const meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+      const meeting = meetings.find(m => m.id === id);
+      if (!meeting) throw new Error('회의자료를 찾을 수 없습니다.');
+      return meeting;
+    }
+    // PHP 백엔드: /meetings.php?id=X
+    return api.get(`/meetings.php?id=${id}`);
+  },
+
+  // 회의자료 생성
+  create: async (data: CreateMeetingInput): Promise<Meeting> => {
+    if (USE_MOCK) {
+      await delay(300);
+      const stored = localStorage.getItem('workflow_meetings');
+      const meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+      const membersData = storageManager.members;
+      const projectsData = storageManager.projects;
+
+      const newMeetingId = Date.now();
+      const attendees: MeetingAttendee[] = data.attendeeIds.map((memberId, idx) => {
+        const member = membersData.find(m => m.id === String(memberId));
+        return member ? {
+          id: newMeetingId * 1000 + idx,
+          meetingId: newMeetingId,
+          memberId,
+          member,
+          createdAt: new Date().toISOString(),
+        } : null;
+      }).filter((a): a is MeetingAttendee => a !== null);
+
+      const project = data.projectId ? projectsData.find(p => p.id === String(data.projectId)) : undefined;
+      const currentMember = getCurrentMember();
+
+      const newMeeting: Meeting = {
+        id: newMeetingId,
+        title: data.title,
+        meetingDate: data.meetingDate,
+        location: data.location,
+        projectId: data.projectId,
+        project: project ? { id: Number(project.id), name: project.name } : undefined,
+        content: data.content,
+        summary: data.summary,
+        authorId: Number(currentMember.id),
+        author: currentMember,
+        attendees,
+        attachments: [],
+        comments: [],
+        status: data.status || 'DRAFT',
+        _count: { attachments: 0, comments: 0 },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      meetings.push(newMeeting);
+      localStorage.setItem('workflow_meetings', JSON.stringify(meetings));
+      return newMeeting;
+    }
+    // PHP 백엔드: POST /meetings.php
+    return api.post<Meeting>('/meetings.php', data);
+  },
+
+  // 회의자료 수정
+  update: async (id: number, data: UpdateMeetingInput): Promise<Meeting> => {
+    if (USE_MOCK) {
+      await delay(200);
+      const stored = localStorage.getItem('workflow_meetings');
+      const meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+      const index = meetings.findIndex(m => m.id === id);
+      if (index === -1) throw new Error('회의자료를 찾을 수 없습니다.');
+
+      const membersData = storageManager.members;
+      const projectsData = storageManager.projects;
+
+      // 참석자 업데이트
+      let attendees = meetings[index].attendees;
+      if (data.attendeeIds) {
+        attendees = data.attendeeIds.map((memberId, idx) => {
+          const member = membersData.find(m => m.id === String(memberId));
+          return member ? {
+            id: id * 1000 + idx + Date.now() % 1000,
+            meetingId: id,
+            memberId,
+            member,
+            createdAt: new Date().toISOString(),
+          } : null;
+        }).filter((a): a is MeetingAttendee => a !== null);
+      }
+
+      const project = data.projectId !== undefined
+        ? (data.projectId ? projectsData.find(p => p.id === String(data.projectId)) : undefined)
+        : meetings[index].project;
+
+      meetings[index] = {
+        ...meetings[index],
+        ...data,
+        attendees,
+        project: project ? { id: Number(project.id), name: project.name } : undefined,
+        updatedAt: new Date().toISOString(),
+      };
+
+      localStorage.setItem('workflow_meetings', JSON.stringify(meetings));
+      return meetings[index];
+    }
+    // PHP 백엔드: PUT /meetings.php?id=X
+    return api.put<Meeting>(`/meetings.php?id=${id}`, data);
+  },
+
+  // 회의자료 삭제
+  delete: async (id: number): Promise<void> => {
+    if (USE_MOCK) {
+      await delay(200);
+      const stored = localStorage.getItem('workflow_meetings');
+      const meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+      const index = meetings.findIndex(m => m.id === id);
+      if (index === -1) throw new Error('회의자료를 찾을 수 없습니다.');
+      meetings.splice(index, 1);
+      localStorage.setItem('workflow_meetings', JSON.stringify(meetings));
+      return;
+    }
+    // PHP 백엔드: DELETE /meetings.php?id=X
+    return api.delete(`/meetings.php?id=${id}`);
+  },
+
+  // 첨부파일 업로드
+  uploadAttachments: async (meetingId: number, files: File[]): Promise<MeetingAttachment[]> => {
+    if (USE_MOCK) {
+      await delay(500);
+      const stored = localStorage.getItem('workflow_meetings');
+      const meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+      const meeting = meetings.find(m => m.id === meetingId);
+      if (!meeting) throw new Error('회의자료를 찾을 수 없습니다.');
+
+      // Mock에서는 파일을 실제로 저장하지 않고 메타데이터만 저장
+      const newAttachments: MeetingAttachment[] = files.map((file, idx) => ({
+        id: meetingId * 10000 + Date.now() % 10000 + idx,
+        meetingId,
+        fileName: file.name,
+        storedName: `${Date.now()}-${file.name}`,
+        filePath: `/uploads/meetings/${Date.now()}-${file.name}`,
+        fileSize: file.size,
+        mimeType: file.type,
+        uploadedAt: new Date().toISOString(),
+      }));
+
+      if (!meeting.attachments) meeting.attachments = [];
+      meeting.attachments.push(...newAttachments);
+      meeting._count = {
+        ...meeting._count,
+        attachments: meeting.attachments.length,
+      };
+
+      localStorage.setItem('workflow_meetings', JSON.stringify(meetings));
+      return newAttachments;
+    }
+
+    // PHP 백엔드: POST /meetings.php?id=X&action=upload (multipart/form-data)
+    const formData = new FormData();
+    files.forEach(file => formData.append('files[]', file));
+
+    const token = tokenManager.getToken();
+    const response = await fetch(`${API_BASE}/meetings.php?id=${meetingId}&action=upload`, {
+      method: 'POST',
+      headers: {
+        ...(token && { Authorization: `Bearer ${token}` }),
+      },
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ error: '파일 업로드에 실패했습니다.' }));
+      throw new Error(error.error);
+    }
+
+    return response.json();
+  },
+
+  // 첨부파일 삭제
+  deleteAttachment: async (meetingId: number, attachmentId: number): Promise<void> => {
+    if (USE_MOCK) {
+      await delay(200);
+      const stored = localStorage.getItem('workflow_meetings');
+      const meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+      const meeting = meetings.find(m => m.id === meetingId);
+      if (!meeting) throw new Error('회의자료를 찾을 수 없습니다.');
+
+      if (meeting.attachments) {
+        meeting.attachments = meeting.attachments.filter(a => a.id !== attachmentId);
+        meeting._count = {
+          ...meeting._count,
+          attachments: meeting.attachments.length,
+        };
+      }
+
+      localStorage.setItem('workflow_meetings', JSON.stringify(meetings));
+      return;
+    }
+    // PHP 백엔드: DELETE /meetings.php?id=X&attachment=Y
+    return api.delete(`/meetings.php?id=${meetingId}&attachment=${attachmentId}`);
+  },
+
+  // 댓글 목록
+  getComments: async (meetingId: number): Promise<MeetingComment[]> => {
+    if (USE_MOCK) {
+      await delay(200);
+      const stored = localStorage.getItem('workflow_meetings');
+      const meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+      const meeting = meetings.find(m => m.id === meetingId);
+      if (!meeting) throw new Error('회의자료를 찾을 수 없습니다.');
+      return meeting.comments || [];
+    }
+    // PHP 백엔드: 상세 조회 시 댓글도 포함되므로 별도 API 불필요
+    // 필요시 /meetings.php?id=X 호출 후 comments 필드 추출
+    const meeting = await api.get<Meeting>(`/meetings.php?id=${meetingId}`);
+    return meeting.comments || [];
+  },
+
+  // 댓글 작성
+  addComment: async (meetingId: number, content: string): Promise<MeetingComment> => {
+    if (USE_MOCK) {
+      await delay(300);
+      const stored = localStorage.getItem('workflow_meetings');
+      const meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+      const meeting = meetings.find(m => m.id === meetingId);
+      if (!meeting) throw new Error('회의자료를 찾을 수 없습니다.');
+
+      const currentMember = getCurrentMember();
+      const newComment: MeetingComment = {
+        id: meetingId * 100000 + Date.now() % 100000,
+        meetingId,
+        authorId: Number(currentMember.id),
+        content,
+        author: currentMember,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      if (!meeting.comments) meeting.comments = [];
+      meeting.comments.unshift(newComment);
+      meeting._count = {
+        ...meeting._count,
+        comments: meeting.comments.length,
+      };
+
+      localStorage.setItem('workflow_meetings', JSON.stringify(meetings));
+      return newComment;
+    }
+    // PHP 백엔드: POST /meetings.php?id=X&action=comment
+    return api.post<MeetingComment>(`/meetings.php?id=${meetingId}&action=comment`, { content });
+  },
+
+  // 댓글 삭제
+  deleteComment: async (meetingId: number, commentId: number): Promise<void> => {
+    if (USE_MOCK) {
+      await delay(200);
+      const stored = localStorage.getItem('workflow_meetings');
+      const meetings: Meeting[] = stored ? JSON.parse(stored) : [];
+      const meeting = meetings.find(m => m.id === meetingId);
+      if (!meeting) throw new Error('회의자료를 찾을 수 없습니다.');
+
+      if (meeting.comments) {
+        meeting.comments = meeting.comments.filter(c => c.id !== commentId);
+        meeting._count = {
+          ...meeting._count,
+          comments: meeting.comments.length,
+        };
+      }
+
+      localStorage.setItem('workflow_meetings', JSON.stringify(meetings));
+      return;
+    }
+    // PHP 백엔드: DELETE /meetings.php?id=X&comment=Y
+    return api.delete(`/meetings.php?id=${meetingId}&comment=${commentId}`);
   },
 };

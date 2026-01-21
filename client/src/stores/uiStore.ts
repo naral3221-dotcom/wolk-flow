@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Task, Project, Team, RoutineTask } from '@/types';
+import type { Task, Project, Team, RoutineTask, Meeting } from '@/types';
 
 // Context Menu 타입 정의
 export type ContextMenuType = 'empty' | 'task' | 'project' | 'team' | 'routine' | null;
@@ -59,6 +59,12 @@ interface UIState {
   editingRoutine: RoutineTask | null;
   routineModalProjectId: string | null;
 
+  // Meeting Modal (회의자료)
+  isMeetingModalOpen: boolean;
+  editingMeeting: Meeting | null;
+  isMeetingDetailModalOpen: boolean;
+  viewingMeeting: Meeting | null;
+
   // Confirm Modal
   isConfirmModalOpen: boolean;
   confirmModalConfig: {
@@ -102,6 +108,12 @@ interface UIState {
   openCreateRoutineModal: (projectId?: string) => void;
   openEditRoutineModal: (routine: RoutineTask) => void;
   closeRoutineModal: () => void;
+
+  openCreateMeetingModal: () => void;
+  openEditMeetingModal: (meeting: Meeting) => void;
+  closeMeetingModal: () => void;
+  openMeetingDetailModal: (meeting: Meeting) => void;
+  closeMeetingDetailModal: () => void;
 
   openConfirmModal: (config: {
     title: string;
@@ -147,6 +159,11 @@ export const useUIStore = create<UIState>((set) => ({
   isRoutineModalOpen: false,
   editingRoutine: null,
   routineModalProjectId: null,
+
+  isMeetingModalOpen: false,
+  editingMeeting: null,
+  isMeetingDetailModalOpen: false,
+  viewingMeeting: null,
 
   isConfirmModalOpen: false,
   confirmModalConfig: null,
@@ -296,6 +313,37 @@ export const useUIStore = create<UIState>((set) => ({
       routineModalProjectId: null,
     }),
 
+  // Meeting Modal Actions
+  openCreateMeetingModal: () =>
+    set({
+      isMeetingModalOpen: true,
+      editingMeeting: null,
+    }),
+
+  openEditMeetingModal: (meeting: Meeting) =>
+    set({
+      isMeetingModalOpen: true,
+      editingMeeting: meeting,
+    }),
+
+  closeMeetingModal: () =>
+    set({
+      isMeetingModalOpen: false,
+      editingMeeting: null,
+    }),
+
+  openMeetingDetailModal: (meeting: Meeting) =>
+    set({
+      isMeetingDetailModalOpen: true,
+      viewingMeeting: meeting,
+    }),
+
+  closeMeetingDetailModal: () =>
+    set({
+      isMeetingDetailModalOpen: false,
+      viewingMeeting: null,
+    }),
+
   // Confirm Modal Actions
   openConfirmModal: (config) =>
     set({
@@ -349,6 +397,10 @@ export const useUIStore = create<UIState>((set) => ({
       isRoutineModalOpen: false,
       editingRoutine: null,
       routineModalProjectId: null,
+      isMeetingModalOpen: false,
+      editingMeeting: null,
+      isMeetingDetailModalOpen: false,
+      viewingMeeting: null,
       isConfirmModalOpen: false,
       confirmModalConfig: null,
     }),

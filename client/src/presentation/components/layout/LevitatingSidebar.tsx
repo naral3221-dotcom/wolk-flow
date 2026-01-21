@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { SpatialCard } from "../ui/SpatialCard";
-import { ClipboardList, Home, Layout, Kanban, Settings, Users, LogOut, Shield } from "lucide-react";
+import { ClipboardList, Home, Layout, Kanban, Settings, Users, LogOut, Shield, FileText } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { cn } from "@/core/utils/cn";
 import { useAuthStore } from "@/stores/authStore";
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
     { icon: Kanban, label: "칸반 보드", path: "/tasks" },
     { icon: Layout, label: "프로젝트", path: "/projects" },
     { icon: Users, label: "팀", path: "/team" },
+    { icon: FileText, label: "회의자료", path: "/meetings" },
     { icon: Settings, label: "설정", path: "/settings" },
 ];
 
